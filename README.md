@@ -1,2 +1,1 @@
-# OAuth2-Study
-## use JWT
+# OAuth2_JWT_Study
