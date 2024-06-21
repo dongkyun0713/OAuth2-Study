@@ -3,7 +3,6 @@ package com.example.oauth2_study.controller;
 import com.example.oauth2_study.dto.UserDTO;
 import com.example.oauth2_study.repository.UserRepository;
 import com.example.oauth2_study.entity.UserEntity;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -16,8 +15,12 @@ import org.springframework.http.HttpStatus;
 @RequestMapping("/api/user")
 public class UserController {
 
-    @Autowired
-    private UserRepository userRepository;
+
+    private final UserRepository userRepository;
+
+    public UserController(UserRepository userRepository) {
+        this.userRepository = userRepository;
+    }
 
     @GetMapping("/profile")
     public ResponseEntity<UserDTO> getUserProfile(@AuthenticationPrincipal OAuth2User oAuth2User) {

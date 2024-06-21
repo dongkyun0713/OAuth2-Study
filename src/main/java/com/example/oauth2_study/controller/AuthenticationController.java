@@ -6,7 +6,6 @@ import com.example.oauth2_study.dto.UserDTO;
 import com.example.oauth2_study.jwt.JWTUtil;
 import com.example.oauth2_study.repository.UserRepository;
 import com.example.oauth2_study.entity.UserEntity;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.security.web.authentication.logout.SecurityContextLogoutHandler;
@@ -25,11 +24,14 @@ import jakarta.servlet.http.HttpServletResponse;
 @RequestMapping("/api/auth")
 public class AuthenticationController {
 
-    @Autowired
-    private JWTUtil jwtUtil;
 
-    @Autowired
-    private UserRepository userRepository;
+    private final JWTUtil jwtUtil;
+    private final UserRepository userRepository;
+
+    public AuthenticationController(JWTUtil jwtUtil, UserRepository userRepository) {
+        this.jwtUtil = jwtUtil;
+        this.userRepository = userRepository;
+    }
 
     @GetMapping("/user")
     public ResponseEntity<UserDTO> getCurrentUser(@AuthenticationPrincipal OAuth2User oAuth2User) {
