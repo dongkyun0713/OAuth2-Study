@@ -17,6 +17,11 @@ import io.jsonwebtoken.ExpiredJwtException;
 
 public class JWTFilter extends OncePerRequestFilter {
 
+    private static final String LOGIN_URI_PATTERN = "^/login(?:/.*)?$";
+    private static final String OAUTH2_URI_PATTERN = "^/oauth2(?:/.*)?$";
+    private static final String AUTHORIZATION_COOKIE_NAME = "Authorization";
+    private static final String TOKEN_EXPIRED_MESSAGE = "토큰 만료";
+
     private final JWTUtil jwtUtil;
 
     public JWTFilter(JWTUtil jwtUtil) {
@@ -30,60 +35,61 @@ public class JWTFilter extends OncePerRequestFilter {
         String requestUri = request.getRequestURI();
 
         // 로그인 및 OAuth2 요청에 대해서는 JWT 검사를 건너뜀
-        if (requestUri.matches("^/login(?:/.*)?$") || requestUri.matches("^/oauth2(?:/.*)?$")) {
+        if (shouldSkipAuthentication(requestUri)) {
             filterChain.doFilter(request, response);
             return;
         }
 
-        // cookie들을 불러온 뒤 Authorization Key에 담긴 쿠키를 찾음
-        String authorization = null;
-        Cookie[] cookies = request.getCookies();
-        if (cookies != null) {
-            for (Cookie cookie : cookies) {
-                if (cookie.getName().equals("Authorization")) {
-                    authorization = cookie.getValue();
-                }
-            }
-        }
+        String authorization = extractAuthorizationToken(request);
 
-        // Authorization 헤더 검증
         if (authorization == null) {
             filterChain.doFilter(request, response);
             return;
         }
 
-        // 토큰
-        String token = authorization;
-
         try {
-            // 토큰 소멸 시간 검증
-            if (jwtUtil.isExpired(token)) {
-                response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Token expired");
-                return;
-            }
-
-            // 토큰에서 username과 role 획득
-            String username = jwtUtil.getUsername(token);
-            String role = jwtUtil.getRole(token);
-
-            // userDTO를 생성하여 값 set
-            UserDTO userDTO = new UserDTO();
-            userDTO.setUsername(username);
-            userDTO.setRole(role);
-
-            // UserDetails에 회원 정보 객체 담기
-            CustomOAuth2User customOAuth2User = new CustomOAuth2User(userDTO);
-
-            // 스프링 시큐리티 인증 토큰 생성
-            Authentication authToken = new UsernamePasswordAuthenticationToken(customOAuth2User, null, customOAuth2User.getAuthorities());
-            // 세션에 사용자 등록
-            SecurityContextHolder.getContext().setAuthentication(authToken);
+            handleJwtAuthentication(authorization);
 
         } catch (ExpiredJwtException e) {
-            response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Token expired");
+            handleExpiredJwtException(response);
             return;
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    private boolean shouldSkipAuthentication(String requestUri) {
+        return requestUri.matches(LOGIN_URI_PATTERN) || requestUri.matches(OAUTH2_URI_PATTERN);
+    }
+
+    private String extractAuthorizationToken(HttpServletRequest request) {
+        Cookie[] cookies = request.getCookies();
+        if (cookies != null) {
+            for (Cookie cookie : cookies) {
+                if (cookie.getName().equals(AUTHORIZATION_COOKIE_NAME)) {
+                    return cookie.getValue();
+                }
+            }
+        }
+        return null;
+    }
+
+    private void handleJwtAuthentication(String token) throws ExpiredJwtException {
+        if (jwtUtil.isExpired(token)) {
+            throw new ExpiredJwtException(null, null, TOKEN_EXPIRED_MESSAGE);
+        }
+
+        String username = jwtUtil.getUsername(token);
+        String role = jwtUtil.getRole(token);
+
+        UserDTO userDTO = UserDTO.createFromJwt(username, role);
+        CustomOAuth2User customOAuth2User = new CustomOAuth2User(userDTO);
+
+        Authentication authToken = new UsernamePasswordAuthenticationToken(customOAuth2User, null, customOAuth2User.getAuthorities());
+        SecurityContextHolder.getContext().setAuthentication(authToken);
+    }
+
+    private void handleExpiredJwtException(HttpServletResponse response) throws IOException {
+        response.sendError(HttpServletResponse.SC_UNAUTHORIZED, TOKEN_EXPIRED_MESSAGE);
     }
 }
